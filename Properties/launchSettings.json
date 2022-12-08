@@ -2,8 +2,7 @@
   "profiles": {
     "Sheesh3Bot": {
       "commandName": "Project",
-      "commandLineArgs": "--port 6969",
-      "launchBrowser": false
+      "commandLineArgs": "--port 6969 --verbose"
     }
   }
 }
