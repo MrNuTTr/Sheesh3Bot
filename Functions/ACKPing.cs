@@ -8,13 +8,13 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace Sheesh3Bot
+namespace Sheesh3Bot.Functions
 {
     public static class ACKPing
     {
-        [FunctionName("v1")]
+        [FunctionName("ACKPing")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "")] HttpRequest req,
             ILogger log)
         {
             log.LogInformation("Handling ping request.");
