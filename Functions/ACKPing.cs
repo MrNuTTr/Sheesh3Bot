@@ -14,7 +14,7 @@ namespace Sheesh3Bot.Functions
     {
         [FunctionName("ACKPing")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = "")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = "v1")] HttpRequest req,
             ILogger log)
         {
             log.LogInformation("Handling ping request.");
