@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "Sheesh3Bot": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7298",
+      "nativeDebugging": false
+    }
+  }
+}
