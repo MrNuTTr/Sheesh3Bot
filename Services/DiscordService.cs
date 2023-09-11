@@ -7,13 +7,12 @@ using Sheesh3Bot.Models;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Net.Http;
-using static System.Net.WebRequestMethods;
 using Newtonsoft.Json;
 using System.Text;
 
-namespace Sheesh3Bot
+namespace Sheesh3Bot.Services
 {
-    internal class Discord
+    internal class DiscordService
     {
         public static readonly HttpClient HttpClient = new HttpClient();
         public static readonly string PublicKey = Environment.GetEnvironmentVariable("DISCORD_PUBLIC_KEY");
@@ -23,7 +22,7 @@ namespace Sheesh3Bot
                 APIOnRestInteractionCreation = false,
                 DefaultRetryMode = RetryMode.AlwaysFail,
 #if DEBUG
-                UseInteractionSnowflakeDate = false,
+                UseInteractionSnowflakeDate = false
 #endif
             });
 
@@ -39,7 +38,23 @@ namespace Sheesh3Bot
             return await ParseHttpInteractionAsync(discordRest);
         }
 
-        public static List<RestSlashCommandDataOption> GetSlashCommandDataOptionsList(RestSlashCommandData commandData)
+        public static Dictionary<string, RestSlashCommandDataOption> GetSlashCommandOptionsDict(RestSlashCommandData commandData)
+        {
+            Dictionary<string, RestSlashCommandDataOption> options = new Dictionary<string, RestSlashCommandDataOption>();
+            var optionEnumerator = commandData.Options.GetEnumerator();
+
+            while (optionEnumerator.MoveNext())
+            {
+                var key = optionEnumerator.Current.Name.ToString();
+                var value = optionEnumerator.Current;
+
+                options.Add(key, value);
+            }
+
+            return options;
+        }
+
+        public static List<RestSlashCommandDataOption> GetSlashCommandOptionsList(RestSlashCommandData commandData)
         {
             List<RestSlashCommandDataOption> options = new List<RestSlashCommandDataOption>();
             var optionEnumerator = commandData.Options.GetEnumerator();
@@ -52,7 +67,7 @@ namespace Sheesh3Bot
             return options;
         }
 
-        public static async Task FollowupAsync(RestInteraction interaction, string content)
+        public static async Task FollowupEditAsync(RestInteraction interaction, string content)
         {
             string baseUrl = "https://discord.com/api/webhooks";
             string url = $"{baseUrl}/{interaction.ApplicationId}/{interaction.Token}/messages/@original";
@@ -65,6 +80,23 @@ namespace Sheesh3Bot
             var contentData = new StringContent(jsonData, Encoding.UTF8, "application/json");
 
             var response = await HttpClient.PatchAsync(url, contentData);
+
+            response.EnsureSuccessStatusCode();
+        }
+
+        public static async Task FollowupNewAsync(RestInteraction interaction, string content)
+        {
+            string baseUrl = "https://discord.com/api/webhooks";
+            string url = $"{baseUrl}/{interaction.ApplicationId}/{interaction.Token}";
+
+            var jsonData = JsonConvert.SerializeObject(new
+            {
+                content = content
+            });
+
+            var contentData = new StringContent(jsonData, Encoding.UTF8, "application/json");
+
+            var response = await HttpClient.PostAsync(url, contentData);
 
             response.EnsureSuccessStatusCode();
         }
