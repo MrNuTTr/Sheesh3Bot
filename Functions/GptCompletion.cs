@@ -1,4 +1,3 @@
-using Discord;
 using Discord.Rest;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
@@ -7,6 +6,7 @@ using OpenAI_API;
 using OpenAI_API.Completions;
 using OpenAI_API.Models;
 using Sheesh3Bot.Models;
+using Sheesh3Bot.Services;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -30,10 +30,11 @@ namespace Sheesh3Bot.Functions
 
             log.LogInformation("OpenAI API key is valid");
 
+            //Parse message
             var discordRequest = JsonConvert.DeserializeObject<DiscordRestRequest>(item);
-            var interaction = await Discord.ParseHttpInteractionAsync(discordRequest);
+            var interaction = await DiscordService.ParseHttpInteractionAsync(discordRequest);
             var command = (RestSlashCommand)interaction;
-            var options = Discord.GetSlashCommandDataOptionsList(command.Data);
+            var options = DiscordService.GetSlashCommandOptionsList(command.Data);
 
             //TODO: Grab these from a file or database
             string promptStart = @"
@@ -79,7 +80,7 @@ namespace Sheesh3Bot.Functions
                 var result = await openai.Completions.CreateCompletionAsync(completionRequest);
                 string completion = result.Completions[0].Text;
 
-                await Discord.FollowupAsync(command, completion);
+                await DiscordService.FollowupEditAsync(command, completion);
             }
             catch (Exception ex)
             {

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Discord.Rest;
 using Discord;
 using System.Web.Http;
+using Sheesh3Bot.Services;
 using Sheesh3Bot.Models;
 using Newtonsoft.Json;
 
@@ -18,19 +19,22 @@ namespace Sheesh3Bot.Functions
         [FunctionName("Interactions")]
         public static async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest httpReq,
-            [Queue("discord-openai-message-queue"), StorageAccount("AzureWebJobsStorage")] ICollector<string> queue,
+            [Queue("discord-openai-message-queue"), StorageAccount("AzureWebJobsStorage")] ICollector<string> openaiMessageQueue,
+            [Queue("discord-gameserver-message-queue"), StorageAccount("AzureWebJobsStorage")] ICollector<string> gameServerMessageQueue,
             ILogger log)
         {
             try
             {
                 DiscordRestRequest discordRequest = await DiscordRestRequest.CreateAsync(httpReq);
-                var interaction = await Discord.ParseHttpInteractionAsync(discordRequest);
+                log.LogError(discordRequest.Body);
+                var interaction = await DiscordService.ParseHttpInteractionAsync(discordRequest);
 
-
+                await interaction.FollowupAsync("test");
 
                 if (interaction.Type == InteractionType.Ping)
-                {
+                { 
                     log.LogInformation("Recieved Discord Ping. Responding.");
+                    await AzureService.GetServerPublicIP("rlcraft");
                     return new OkObjectResult(new { type = 1 });
                 }
 
@@ -42,15 +46,25 @@ namespace Sheesh3Bot.Functions
                     // Will need to add proper type checking if this changes.
                     var command = (RestSlashCommand)interaction;
 
-
                     if (command.Data.Name == "support")
                     {
-                        log.LogInformation("Incoming slash command: support - sending message to queue and deferring.");
+                        log.LogInformation("Incoming slash command: support");
 
-                        queue.Add(JsonConvert.SerializeObject(discordRequest));
+                        openaiMessageQueue.Add(JsonConvert.SerializeObject(discordRequest));
 
-                        return Discord.JsonResult(command.Defer());
+                        return DiscordService.JsonResult(command.Defer());
                     }
+
+                    if (command.Data.Name == "turn-on")
+                    {
+                        log.LogInformation("Incoming slash command: turn-on");
+
+                        gameServerMessageQueue.Add(JsonConvert.SerializeObject(discordRequest));
+
+                        return DiscordService.JsonResult(command.Defer());
+                    }
+
+                    log.LogError("Uh oh, unhandled command");
                 }
 
                 log.LogError("Unhandled interaction type.");
