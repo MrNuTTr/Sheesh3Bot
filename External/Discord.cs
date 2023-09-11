@@ -39,7 +39,7 @@ namespace Sheesh3Bot
             return await ParseHttpInteractionAsync(discordRest);
         }
 
-        public static List<RestSlashCommandDataOption> GetDataOptions(RestSlashCommandData commandData)
+        public static List<RestSlashCommandDataOption> GetSlashCommandDataOptionsList(RestSlashCommandData commandData)
         {
             List<RestSlashCommandDataOption> options = new List<RestSlashCommandDataOption>();
             var optionEnumerator = commandData.Options.GetEnumerator();

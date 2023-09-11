@@ -33,7 +33,7 @@ namespace Sheesh3Bot.Functions
             var discordRequest = JsonConvert.DeserializeObject<DiscordRestRequest>(item);
             var interaction = await Discord.ParseHttpInteractionAsync(discordRequest);
             var command = (RestSlashCommand)interaction;
-            var options = Discord.GetDataOptions(command.Data);
+            var options = Discord.GetSlashCommandDataOptionsList(command.Data);
 
             //TODO: Grab these from a file or database
             string promptStart = @"

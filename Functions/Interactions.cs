@@ -45,11 +45,7 @@ namespace Sheesh3Bot.Functions
 
                     if (command.Data.Name == "support")
                     {
-                        log.LogInformation("/support command, sending message to queue and deferring.");
-
-                        var optionEnumerator = command.Data.Options.GetEnumerator();
-                        optionEnumerator.MoveNext();
-                        string value = optionEnumerator.Current.Value.ToString();
+                        log.LogInformation("Incoming slash command: support - sending message to queue and deferring.");
 
                         queue.Add(JsonConvert.SerializeObject(discordRequest));
 

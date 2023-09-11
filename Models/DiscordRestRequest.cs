@@ -26,11 +26,5 @@ namespace Sheesh3Bot.Models
 
             return request;
         }
-
-        public override string ToString()
-        {
-            return JsonConvert.SerializeObject(this, Formatting.Indented);
-        }
-
     }
 }
