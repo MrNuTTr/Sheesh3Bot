@@ -42,7 +42,8 @@ namespace Sheesh3Bot.Functions
 
                     string ip = await AzureService.GetServerPublicIP(server);
 
-                    await DiscordService.FollowupNewAsync(interaction, $"Server is online. Here is the connection IP: `{ip}`");
+                    await DiscordService.FollowupNewAsync(interaction, $"Server is online. Here is the connection IP: `{ip}`" +
+                        $"\nNote that it could take a few extra minutes for all the mods to load.");
                 }
             }
             catch (HttpRequestException ex)
