@@ -47,7 +47,8 @@ namespace Sheesh3Bot.Functions
                     else if (success == 1)
                     {
                         msg = $"Server is online with IP: `{ip}`" +
-                            $"\nServer will turn off in 3 hours to save me *M0n3y$*.";
+                            $"\nServer will turn off in 3 hours to save me *M0n3y$*." +
+                            $"\n";
                     }
                     else
                     {
@@ -56,8 +57,7 @@ namespace Sheesh3Bot.Functions
 
                     AzureService.SendServerShutdownRequest(tableClient, server, DateTime.UtcNow.AddHours(3));
 
-                    await DiscordService.FollowupNewAsync(interaction, $"Server is online. Here is the connection IP: `{ip}`" +
-                        $"\nNote that it could take a few extra minutes for all the mods to load.");
+                    await DiscordService.FollowupNewAsync(interaction, msg);
                 }
             }
             catch (HttpRequestException ex)
