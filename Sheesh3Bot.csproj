@@ -8,6 +8,7 @@
     <PackageReference Include="Azure.ResourceManager.Network" Version="1.4.0" />
     <PackageReference Include="Discord.Net.Rest" Version="3.12.0" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.Storage" Version="5.2.0" />
+    <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.Tables" Version="1.2.0" />
     <PackageReference Include="Microsoft.NET.Sdk.Functions" Version="4.1.1" />
     <PackageReference Include="OpenAI" Version="1.7.2" />
   </ItemGroup>

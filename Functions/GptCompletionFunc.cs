@@ -13,9 +13,9 @@ using System.Threading.Tasks;
 
 namespace Sheesh3Bot.Functions
 {
-    public class GptCompletion
+    public class GptCompletionFunc
     {
-        [FunctionName("GptCompletion")]
+        [FunctionName("GptCompletionFunc")]
         public static async Task Run(
             [QueueTrigger("discord-openai-message-queue", Connection = "AzureWebJobsStorage")] string item, 
             ILogger log)

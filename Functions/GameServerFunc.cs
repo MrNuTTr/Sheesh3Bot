@@ -8,13 +8,16 @@ using Sheesh3Bot.Services;
 using System.Threading.Tasks;
 using System;
 using System.Net.Http;
+using Azure.Data.Tables;
 
 namespace Sheesh3Bot.Functions
 {
-    public class GameServerManager
+    public class GameServerFunc
     {
-        [FunctionName("GameServerManager")]
-        public static async Task Run([QueueTrigger("discord-gameserver-message-queue", Connection = "AzureWebJobsStorage")]string item, 
+        [FunctionName("GameServerFunc")]
+        public static async Task Run(
+            [QueueTrigger("discord-gameserver-message-queue", Connection = "AzureWebJobsStorage")] string item,
+            [Table("serverTimerShutdown")] TableClient tableClient,
             ILogger log)
         {
             //Parse message
@@ -34,13 +37,24 @@ namespace Sheesh3Bot.Functions
                     await DiscordService.FollowupEditAsync(interaction, "Turning on the server. Please wait a couple minutes.");
 
                     var success = await AzureService.TurnOnGameServer(server);
+                    string ip = await AzureService.GetServerPublicIP(server);
+                    string msg = "";
 
-                    if (success == false)
+                    if (success == 0)
                     {
-                        throw new Exception("Could not turn on server.. for some reason.");
+                        throw new Exception("Couldn't turn on server. Probably doesn't exist.");
+                    }
+                    else if (success == 1)
+                    {
+                        msg = $"Server is online with IP: `{ip}`" +
+                            $"\nServer will turn off in 3 hours to save me *M0n3y$*.";
+                    }
+                    else
+                    {
+                        msg = $"Bro it's already turned on. Here's the IP: `{ip}`";
                     }
 
-                    string ip = await AzureService.GetServerPublicIP(server);
+                    AzureService.SendServerShutdownRequest(tableClient, server, DateTime.UtcNow.AddHours(3));
 
                     await DiscordService.FollowupNewAsync(interaction, $"Server is online. Here is the connection IP: `{ip}`" +
                         $"\nNote that it could take a few extra minutes for all the mods to load.");

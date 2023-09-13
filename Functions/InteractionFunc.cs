@@ -14,7 +14,7 @@ using Newtonsoft.Json;
 
 namespace Sheesh3Bot.Functions
 {
-    public static class Interactions
+    public static class InteractionFunc
     {
         [FunctionName("Interactions")]
         public static async Task<IActionResult> Run(
@@ -29,12 +29,9 @@ namespace Sheesh3Bot.Functions
                 log.LogError(discordRequest.Body);
                 var interaction = await DiscordService.ParseHttpInteractionAsync(discordRequest);
 
-                await interaction.FollowupAsync("test");
-
                 if (interaction.Type == InteractionType.Ping)
                 { 
                     log.LogInformation("Recieved Discord Ping. Responding.");
-                    await AzureService.GetServerPublicIP("rlcraft");
                     return new OkObjectResult(new { type = 1 });
                 }
 
