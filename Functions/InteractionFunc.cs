@@ -26,7 +26,6 @@ namespace Sheesh3Bot.Functions
             try
             {
                 DiscordRestRequest discordRequest = await DiscordRestRequest.CreateAsync(httpReq);
-                log.LogError(discordRequest.Body);
                 var interaction = await DiscordService.ParseHttpInteractionAsync(discordRequest);
 
                 if (interaction.Type == InteractionType.Ping)
@@ -67,9 +66,6 @@ namespace Sheesh3Bot.Functions
                 log.LogError("Unhandled interaction type.");
                 return new BadRequestResult();
             }
-
-
-
             catch (BadSignatureException ex)
             {
                 log.LogError(ex.ToString());

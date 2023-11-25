@@ -10,6 +10,7 @@ namespace Sheesh3Bot.Functions
 {
     public class ServerTimerShutdownFunc
     {
+        // Runs once every five minutes
         [FunctionName("ServerTimerShutdownFunc")]
         public static async Task Run(
             [TimerTrigger("0 */5 * * * *")]TimerInfo timer,

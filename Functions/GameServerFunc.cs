@@ -30,35 +30,38 @@ namespace Sheesh3Bot.Functions
             {
                 var server = options["server"].Value.ToString();
 
-                if (server.ToLower() == "rlcraft")
+                log.LogInformation($"Turning on {server} Server");
+
+                await DiscordService.FollowupEditAsync(interaction, "Turning on the server. Please wait a minute.");
+
+                AzureService.SendServerShutdownRequest(tableClient, server, DateTime.UtcNow.AddHours(3));
+
+                var success = await AzureService.TurnOnGameServer(server);
+                string ip = await AzureService.GetServerPublicIP(server);
+                string msg = "";
+
+                if (success != 0 && string.IsNullOrEmpty(ip))
                 {
-                    log.LogInformation("Turning on RLCraft Server");
-
-                    await DiscordService.FollowupEditAsync(interaction, "Turning on the server. Please wait a couple minutes.");
-
-                    var success = await AzureService.TurnOnGameServer(server);
-                    string ip = await AzureService.GetServerPublicIP(server);
-                    string msg = "";
-
-                    if (success == 0)
-                    {
-                        throw new Exception("Couldn't turn on server. Probably doesn't exist.");
-                    }
-                    else if (success == 1)
-                    {
-                        msg = $"Server is online with IP: `{ip}`" +
-                            $"\nServer will turn off in 3 hours to save me *M0n3y$*." +
-                            $"\n";
-                    }
-                    else
-                    {
-                        msg = $"Bro it's already turned on. Here's the IP: `{ip}`";
-                    }
-
-                    AzureService.SendServerShutdownRequest(tableClient, server, DateTime.UtcNow.AddHours(3));
-
-                    await DiscordService.FollowupNewAsync(interaction, msg);
+                    ip = await AzureService.CreateServerPublicIP(server);
                 }
+
+                if (success == 0)
+                {
+                    msg = $"Couldn't turn on server {server}. Probably doesn't exist.";
+                    log.LogError(msg);
+                }
+                else if (success == 1)
+                {
+                    msg = $"Server is online with IP: `{ip}`" +
+                        $"\nServer will turn off in 3 hours to save me *M0n3y$*." +
+                        $"\n";
+                }
+                else
+                {
+                    msg = $"Bro it's already turned on. Here's the IP: `{ip}`";
+                }
+
+                await DiscordService.FollowupNewAsync(interaction, msg);
             }
             catch (HttpRequestException ex)
             {
@@ -70,7 +73,8 @@ namespace Sheesh3Bot.Functions
                 log.LogError(ex.Message);
                 log.LogError(ex.StackTrace);
 
-                await DiscordService.FollowupNewAsync(interaction, "Whoops, it didn't turn on. Idk man.");
+                await DiscordService.FollowupNewAsync(interaction, 
+                    $"Whoops, that didn't work for some reason. Get someone to check the logs.");
             }
         }
     }

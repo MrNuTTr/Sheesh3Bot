@@ -1,16 +1,18 @@
 ﻿using Azure;
 using Azure.Core;
+using Azure.Data.Tables;
 using Azure.Identity;
 using Azure.ResourceManager;
-using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Compute;
+using Azure.ResourceManager.Compute.Models;
+using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Resources;
+using Sheesh3Bot.Models;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
-using System;
-using Azure.Data.Tables;
-using Microsoft.Azure.WebJobs;
-using Sheesh3Bot.Models;
 
 namespace Sheesh3Bot.Services
 {
@@ -87,47 +89,13 @@ namespace Sheesh3Bot.Services
             {
                 if (virtualMachine.Data.Name.ToLower() == serverName.ToLower())
                 {
-                    await virtualMachine.PowerOffAsync(WaitUntil.Completed);
+                    await virtualMachine.DeallocateAsync(WaitUntil.Completed);
 
                     return true;
                 }
             }
 
             return false;
-        }
-
-        public static async Task<string> GetServerPublicIP(string serverName)
-        {
-            await LoadResourceGroup();
-
-            await foreach (VirtualMachineResource virtualMachine in _resourceGroup.GetVirtualMachines())
-            {
-                if (virtualMachine.Data.Name.ToLower() == serverName.ToLower())
-                {
-                    var networkProfile = virtualMachine.Data.NetworkProfile.NetworkInterfaces.FirstOrDefault();
-                    var networkInterface = _client.GetNetworkInterfaceResource(new ResourceIdentifier(networkProfile.Id));
-
-                    var ipAddressRes = networkInterface.GetNetworkInterfaceIPConfigurations().FirstOrDefault();
-                    if (ipAddressRes == null) { continue; }
-
-                    if (!ipAddressRes.HasData)
-                    {
-                        ipAddressRes = ipAddressRes.Get().Value;
-                    }
-
-                    var publicIpAddressRes = _client.GetPublicIPAddressResource(new ResourceIdentifier(ipAddressRes.Data.PublicIPAddress.Id));
-                    if (publicIpAddressRes == null) { continue; }
-
-                    if (!publicIpAddressRes.HasData)
-                    {
-                        publicIpAddressRes = publicIpAddressRes.Get().Value;
-                    }
-
-                    return publicIpAddressRes.Data.IPAddress.ToString();
-                }
-            }
-
-            return "";
         }
 
         public static void SendServerShutdownRequest(TableClient tableClient, string serverName, DateTime shutdownTime)
@@ -141,6 +109,196 @@ namespace Sheesh3Bot.Services
             };
 
             tableClient.UpsertEntity(request);
+        }
+
+        public static async Task<string> GetServerPublicIP(string serverName)
+        {
+            await LoadResourceGroup();
+
+            await foreach (VirtualMachineResource virtualMachine in _resourceGroup.GetVirtualMachines())
+            {
+                if (virtualMachine.Data.Name.ToLower() != serverName.ToLower())
+                {
+                    continue;
+                }
+
+                var networkProfile = virtualMachine.Data.NetworkProfile.NetworkInterfaces.FirstOrDefault();
+                var networkInterface = _client.GetNetworkInterfaceResource(new ResourceIdentifier(networkProfile.Id));
+
+                var ipAddressRes = networkInterface.GetNetworkInterfaceIPConfigurations().FirstOrDefault();
+                if (ipAddressRes == null) { continue; }
+
+                if (!ipAddressRes.HasData)
+                {
+                    ipAddressRes = ipAddressRes.Get().Value;
+                }
+
+                if (ipAddressRes.Data.PublicIPAddress == null)
+                {
+                    return "";
+                }
+
+                var publicIpAddressRes = _client.GetPublicIPAddressResource(new ResourceIdentifier(ipAddressRes.Data.PublicIPAddress.Id));
+                if (publicIpAddressRes == null) { continue; }
+
+                if (!publicIpAddressRes.HasData)
+                {
+                    publicIpAddressRes = publicIpAddressRes.Get().Value;
+                }
+
+                return publicIpAddressRes.Data.IPAddress.ToString();
+            }
+
+            return "";
+        }
+
+        /// <summary>
+        /// Attaches a new public IP address to the provided serverName. 
+        /// Should only call this if you've verified there is no public IP, otherwise it will try to assign another.
+        /// <br></br>
+        /// <br></br>
+        /// Documentation: <br></br>
+        /// https://github.com/Azure-Samples/azure-samples-net-management/blob/master/samples/network/manage-ip-address/Program.cs
+        /// </summary>
+        /// <param name="serverName"></param>
+        /// <returns></returns>
+        public static async Task<string> CreateServerPublicIP(string serverName)
+        {
+            await LoadResourceGroup();
+            // TODO: Dynamically set location based on selected server. Fine for now.
+            string location = "eastus2";
+
+            var publicIPAddressContainer = _resourceGroup.GetPublicIPAddresses();
+            var networkInterfaceContainer = _resourceGroup.GetNetworkInterfaces();
+
+            // Create Public IP Address and attach it to a new Network Interface
+            var publicIPAddressData = new PublicIPAddressData
+            {
+                PublicIPAddressVersion = Azure.ResourceManager.Network.Models.NetworkIPVersion.IPv4,
+                PublicIPAllocationMethod = Azure.ResourceManager.Network.Models.NetworkIPAllocationMethod.Dynamic,
+                Location = location
+            };
+
+            var publicIpAddress = publicIPAddressContainer.CreateOrUpdate(WaitUntil.Completed, $"{serverName}-ip", publicIPAddressData).Value;
+            publicIpAddress = publicIpAddress.Get();
+            var vnet = _resourceGroup.GetVirtualNetworks().FirstOrDefault();
+
+            var networkInterfaceData = new NetworkInterfaceData
+            {
+                Location = location,
+                IPConfigurations =
+                {
+                    new NetworkInterfaceIPConfigurationData
+                    {
+                        Name = "ipconfig1",
+                        Primary = true,
+                        Subnet = new SubnetData() { Id = vnet.Data.Subnets.First().Id },
+                        PrivateIPAllocationMethod = Azure.ResourceManager.Network.Models.NetworkIPAllocationMethod.Dynamic,
+                        PublicIPAddress = new PublicIPAddressData() { Id = publicIpAddress.Id }
+                    }
+                }
+            };
+
+            // Get the server's current Network Interface
+            NetworkInterfaceResource networkInterface = null;
+            await foreach (VirtualMachineResource virtualMachine in _resourceGroup.GetVirtualMachines())
+            {
+                if (virtualMachine.Data.Name.ToLower() != serverName.ToLower())
+                {
+                    continue;
+                }
+
+                var networkProfile = virtualMachine.Data.NetworkProfile.NetworkInterfaces.FirstOrDefault();
+                networkInterface = _client.GetNetworkInterfaceResource(new ResourceIdentifier(networkProfile.Id));
+            }
+
+            if (networkInterface == null)
+            {
+                throw new Exception($"No server named {serverName}, could not update IP");
+            }
+
+            // Update the interface to the new data
+            networkInterfaceContainer.CreateOrUpdate(WaitUntil.Completed, networkInterface.Id.Name, networkInterfaceData);
+
+            var publicIpAddressResource = _client.GetPublicIPAddressResource(publicIpAddress.Id);
+
+            return publicIpAddressResource.Data.IPAddress.ToString();
+        }
+
+        public static async Task DeleteServerPublicIP(string serverName)
+        {
+            await LoadResourceGroup();
+            // TODO: Dynamically set location based on selected server. Fine for now.
+            string location = "eastus2";
+
+            var networkInterfaceContainer = _resourceGroup.GetNetworkInterfaces();
+            var vnet = _resourceGroup.GetVirtualNetworks().FirstOrDefault();
+
+            // Create network interface without public IP to replace the old one
+            var networkInterfaceData = new NetworkInterfaceData
+            {
+                Location = location,
+                IPConfigurations =
+                {
+                    new NetworkInterfaceIPConfigurationData
+                    {
+                        Name = "ipconfig1",
+                        Primary = true,
+                        Subnet = new SubnetData() { Id = vnet.Data.Subnets.First().Id },
+                        PrivateIPAllocationMethod = Azure.ResourceManager.Network.Models.NetworkIPAllocationMethod.Dynamic,
+                    }
+                }
+            };
+
+            // Get the server's current Network Interface
+            NetworkInterfaceResource networkInterface = null;
+            await foreach (VirtualMachineResource virtualMachine in _resourceGroup.GetVirtualMachines())
+            {
+                if (virtualMachine.Data.Name.ToLower() != serverName.ToLower())
+                {
+                    continue;
+                }
+
+                var networkProfile = virtualMachine.Data.NetworkProfile.NetworkInterfaces.FirstOrDefault();
+                networkInterface = _client.GetNetworkInterfaceResource(new ResourceIdentifier(networkProfile.Id));
+            }
+
+            if (networkInterface == null)
+            {
+                throw new Exception($"No server named {serverName}, could not update IP");
+            }
+
+            var ipAddressRes = networkInterface.GetNetworkInterfaceIPConfigurations().FirstOrDefault();
+            ipAddressRes = ipAddressRes.Get();
+
+            if (ipAddressRes.Data.PublicIPAddress == null)
+            {
+                return;
+            }
+
+            // Update the interface to the new data and delete IP
+            networkInterfaceContainer.CreateOrUpdate(WaitUntil.Completed, networkInterface.Id.Name, networkInterfaceData);
+
+            var publicIP = _client.GetPublicIPAddressResource(ipAddressRes.Data.PublicIPAddress.Id);
+            publicIP.Delete(WaitUntil.Completed);
+        }
+
+        public static async Task RemovePublicIPFromAllShutdownServers()
+        {
+            await LoadResourceGroup();
+
+            await foreach (VirtualMachineResource virtualMachine in _resourceGroup.GetVirtualMachines())
+            {
+                // https://stackoverflow.com/questions/75116030/get-azure-vm-powerstate-in-c-dotnet-using-azure-resourcemanager
+                var statuses = virtualMachine.InstanceView().Value.Statuses;
+                // statuses[0] refers to the provisioning status
+                var displayStatus = statuses[1].DisplayStatus.ToLower();
+
+                if (displayStatus.Contains("deallocated") || displayStatus.Contains("stopped"))
+                {
+                    await DeleteServerPublicIP(virtualMachine.Data.Name);
+                }
+            }
         }
     }
 }
