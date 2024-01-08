@@ -116,7 +116,7 @@ namespace Sheesh3Bot.Services
 
             if (!ipAddressRes.HasData)
             {
-                ipAddressRes = ipAddressRes.Get().Value;
+                ipAddressRes = ipAddressRes.Get();
             }
 
             if (ipAddressRes.Data.PublicIPAddress == null)
@@ -129,7 +129,7 @@ namespace Sheesh3Bot.Services
 
             if (!publicIpAddressRes.HasData)
             {
-                publicIpAddressRes = publicIpAddressRes.Get().Value;
+                publicIpAddressRes = publicIpAddressRes.Get();
             }
 
             return publicIpAddressRes.Data.IPAddress.ToString();
@@ -208,6 +208,9 @@ namespace Sheesh3Bot.Services
 
             // Update the interface to the new data
             await networkInterfaceContainer.CreateOrUpdateAsync(WaitUntil.Completed, networkInterface.Id.Name, networkInterfaceData);
+
+            // For some reason the above function returns before the IP address is fully attached. Giving me a bunch of nulls.
+            System.Threading.Thread.Sleep(5000);
 
             var publicIpAddressResource = _client.GetPublicIPAddressResource(publicIpAddress.Id);
             publicIpAddressResource = publicIpAddressResource.Get();
@@ -306,7 +309,7 @@ namespace Sheesh3Bot.Services
                 {
                     foreach (var data in timeSeries.Data)
                     {
-                        if (data.Total.HasValue)
+                        if (data.Total.HasValue && data.Total.Value > 0.0)
                         {
                             sum += data.Total.Value;
                             count++;

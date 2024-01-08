@@ -32,9 +32,9 @@ namespace Sheesh3Bot.Functions
                 }
 
                 var resourceId = serverDataTable.GetEntity<ServerData>(request.ServerName, request.ServerName).Value.ResourceID;
-                var averageNetworkBytes = AzureService.GetAverageNetworkUsageBytesPast5Minutes(resourceId);
+                var averageNetworkBytes = AzureService.GetAverageNetworkUsageBytesPast15Minutes(resourceId);
 
-                if (averageNetworkBytes < 60000.0 || averageNetworkBytes is double.NaN)
+                if (averageNetworkBytes < 100000.0 || averageNetworkBytes is double.NaN)
                 {
                     log.LogInformation($"Turning off server: {request.ServerName}");
                     await AzureService.TurnOffGameServer(resourceId);
