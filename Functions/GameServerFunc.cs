@@ -17,7 +17,8 @@ namespace Sheesh3Bot.Functions
         [FunctionName("GameServerFunc")]
         public static async Task Run(
             [QueueTrigger("discord-gameserver-message-queue", Connection = "AzureWebJobsStorage")] string item,
-            [Table("serverTimerShutdown")] TableClient tableClient,
+            [Table("serverTimerShutdownTable")] TableClient serverShutdownTable,
+            [Table("serverDataTable")] TableClient serverDataTable,
             ILogger log)
         {
             //Parse message
@@ -28,33 +29,30 @@ namespace Sheesh3Bot.Functions
 
             try
             {
-                var server = options["server"].Value.ToString();
-
-                log.LogInformation($"Turning on {server} Server");
+                string serverId = options["server"].Value.ToString();
+                string resourceId = serverDataTable.GetEntity<ServerData>(serverId, serverId).Value.ResourceID;
 
                 await DiscordService.FollowupEditAsync(interaction, "Turning on the server. Please wait a minute.");
 
-                AzureService.SendServerShutdownRequest(tableClient, server, DateTime.UtcNow.AddHours(3));
+                AzureService.SendServerShutdownRequest(serverShutdownTable, serverId, DateTime.UtcNow.AddHours(1));
 
-                var success = await AzureService.TurnOnGameServer(server);
-                string ip = await AzureService.GetServerPublicIP(server);
+                var startServer = AzureService.TurnOnGameServer(resourceId);
+                var assignIP = AzureService.GetServerPublicIP(serverId, resourceId);
+
+                await Task.WhenAll(startServer, assignIP);
+
+                var success = await startServer;
+                string ip = await assignIP;
                 string msg = "";
-
-                if (success != 0 && string.IsNullOrEmpty(ip))
-                {
-                    ip = await AzureService.CreateServerPublicIP(server);
-                }
 
                 if (success == 0)
                 {
-                    msg = $"Couldn't turn on server {server}. Probably doesn't exist.";
+                    msg = $"Couldn't turn on server {serverId}. Probably doesn't exist.";
                     log.LogError(msg);
                 }
                 else if (success == 1)
                 {
-                    msg = $"Server is online with IP: `{ip}`" +
-                        $"\nServer will turn off in 3 hours to save me *M0n3y$*." +
-                        $"\n";
+                    msg = $"Server is online with IP: `{ip}`";
                 }
                 else
                 {

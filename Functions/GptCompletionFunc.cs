@@ -65,7 +65,7 @@ namespace Sheesh3Bot.Functions
             CompletionRequest completionRequest = new CompletionRequest()
             {
                 Prompt = promptStart + prompt + promptEnd,
-                Model = Model.DavinciText,
+                Model = Model.Davinci,
                 Temperature = 0.9,
                 PresencePenalty = 0.5,
                 FrequencyPenalty = 0.9,

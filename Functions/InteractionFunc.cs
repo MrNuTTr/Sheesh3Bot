@@ -30,31 +30,24 @@ namespace Sheesh3Bot.Functions
 
                 if (interaction.Type == InteractionType.Ping)
                 { 
-                    log.LogInformation("Recieved Discord Ping. Responding.");
                     return new OkObjectResult(new { type = 1 });
                 }
 
                 else if (interaction.Type == InteractionType.ApplicationCommand)
-                {
-                    log.LogInformation("Recieved Application Command.");
-                    
+                {                    
                     // Currently the only supported commands are slash.
                     // Will need to add proper type checking if this changes.
                     var command = (RestSlashCommand)interaction;
 
                     if (command.Data.Name == "support")
                     {
-                        log.LogInformation("Incoming slash command: support");
-
                         openaiMessageQueue.Add(JsonConvert.SerializeObject(discordRequest));
 
                         return DiscordService.JsonResult(command.Defer());
                     }
 
-                    if (command.Data.Name == "turn-on")
+                    if (command.Data.Name == "start")
                     {
-                        log.LogInformation("Incoming slash command: turn-on");
-
                         gameServerMessageQueue.Add(JsonConvert.SerializeObject(discordRequest));
 
                         return DiscordService.JsonResult(command.Defer());

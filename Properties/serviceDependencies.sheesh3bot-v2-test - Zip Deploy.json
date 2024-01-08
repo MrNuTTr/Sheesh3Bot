@@ -1,10 +1,5 @@
 {
   "dependencies": {
-    "storage1": {
-      "resourceId": "/subscriptions/[parameters('subscriptionId')]/resourceGroups/[parameters('resourceGroupName')]/providers/Microsoft.Storage/storageAccounts/sheesh3botv2",
-      "type": "storage.azure",
-      "connectionId": "AzureWebJobsStorage"
-    },
     "appInsights1": {
       "resourceId": "/subscriptions/[parameters('subscriptionId')]/resourceGroups/[parameters('resourceGroupName')]/providers/microsoft.insights/components/Sheesh3Bot-v2",
       "type": "appInsights.azure",

@@ -7,12 +7,16 @@ using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.Compute.Models;
 using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Resources;
+using Azure.ResourceManager.Monitor;
+using Azure.ResourceManager.Monitor.Models;
+using Microsoft.Identity.Client;
 using Sheesh3Bot.Models;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace Sheesh3Bot.Services
 {
@@ -53,49 +57,36 @@ namespace Sheesh3Bot.Services
         ///     </list>
         ///     </para>
         /// </returns>
-        public static async Task<int> TurnOnGameServer(string serverName)
+        public static async Task<int> TurnOnGameServer(string resourceId)
         {
             await LoadResourceGroup();
 
-            await foreach (VirtualMachineResource virtualMachine in _resourceGroup.GetVirtualMachines())
-            {
-                if (virtualMachine.Data.Name.ToLower() == serverName.ToLower())
-                {
-                    // Check power state before attempting to turn on
-                    var instanceView = await virtualMachine.InstanceViewAsync();
-                    var statuses = instanceView.Value.Statuses;
-                    foreach (var status in statuses)
-                    {
-                        if (status.Code == "PowerState/running")
-                        {
-                            return 2;
-                        }
-                    }
+            var vm = _client.GetVirtualMachineResource(ResourceIdentifier.Parse(resourceId));
 
-                    await virtualMachine.PowerOnAsync(WaitUntil.Completed);
-                    
-                    return 1;
+            var instanceView = await vm.InstanceViewAsync();
+            var statuses = instanceView.Value.Statuses;
+            foreach (var status in statuses)
+            {
+                if (status.Code == "PowerState/running")
+                {
+                    return 2;
                 }
             }
-            
-            return 0;
+
+            vm.PowerOn(WaitUntil.Completed);
+
+            return 1;
         }
 
-        public static async Task<bool> TurnOffGameServer(string serverName)
+        public static async Task<bool> TurnOffGameServer(string resourceId)
         {
             await LoadResourceGroup();
 
-            await foreach (VirtualMachineResource virtualMachine in _resourceGroup.GetVirtualMachines())
-            {
-                if (virtualMachine.Data.Name.ToLower() == serverName.ToLower())
-                {
-                    await virtualMachine.DeallocateAsync(WaitUntil.Completed);
+            var vm = _client.GetVirtualMachineResource(ResourceIdentifier.Parse(resourceId));
 
-                    return true;
-                }
-            }
+            await vm.DeallocateAsync(WaitUntil.Completed);
 
-            return false;
+            return true;
         }
 
         public static void SendServerShutdownRequest(TableClient tableClient, string serverName, DateTime shutdownTime)
@@ -111,45 +102,49 @@ namespace Sheesh3Bot.Services
             tableClient.UpsertEntity(request);
         }
 
-        public static async Task<string> GetServerPublicIP(string serverName)
+        private static async Task<string> GetServerIP(string resourceId)
         {
             await LoadResourceGroup();
 
-            await foreach (VirtualMachineResource virtualMachine in _resourceGroup.GetVirtualMachines())
+            var vm = _client.GetVirtualMachineResource(ResourceIdentifier.Parse(resourceId));
+            vm = vm.Get();
+            var networkProfile = vm.Data.NetworkProfile.NetworkInterfaces.FirstOrDefault();
+            var networkInterface = _client.GetNetworkInterfaceResource(new ResourceIdentifier(networkProfile.Id));
+
+            var ipAddressRes = networkInterface.GetNetworkInterfaceIPConfigurations().FirstOrDefault();
+            if (ipAddressRes == null) { return ""; }
+
+            if (!ipAddressRes.HasData)
             {
-                if (virtualMachine.Data.Name.ToLower() != serverName.ToLower())
-                {
-                    continue;
-                }
-
-                var networkProfile = virtualMachine.Data.NetworkProfile.NetworkInterfaces.FirstOrDefault();
-                var networkInterface = _client.GetNetworkInterfaceResource(new ResourceIdentifier(networkProfile.Id));
-
-                var ipAddressRes = networkInterface.GetNetworkInterfaceIPConfigurations().FirstOrDefault();
-                if (ipAddressRes == null) { continue; }
-
-                if (!ipAddressRes.HasData)
-                {
-                    ipAddressRes = ipAddressRes.Get().Value;
-                }
-
-                if (ipAddressRes.Data.PublicIPAddress == null)
-                {
-                    return "";
-                }
-
-                var publicIpAddressRes = _client.GetPublicIPAddressResource(new ResourceIdentifier(ipAddressRes.Data.PublicIPAddress.Id));
-                if (publicIpAddressRes == null) { continue; }
-
-                if (!publicIpAddressRes.HasData)
-                {
-                    publicIpAddressRes = publicIpAddressRes.Get().Value;
-                }
-
-                return publicIpAddressRes.Data.IPAddress.ToString();
+                ipAddressRes = ipAddressRes.Get().Value;
             }
 
-            return "";
+            if (ipAddressRes.Data.PublicIPAddress == null)
+            {
+                return "";
+            }
+
+            var publicIpAddressRes = _client.GetPublicIPAddressResource(new ResourceIdentifier(ipAddressRes.Data.PublicIPAddress.Id));
+            if (publicIpAddressRes == null) { return ""; }
+
+            if (!publicIpAddressRes.HasData)
+            {
+                publicIpAddressRes = publicIpAddressRes.Get().Value;
+            }
+
+            return publicIpAddressRes.Data.IPAddress.ToString();
+        }
+
+        public static async Task<string> GetServerPublicIP(string serverName, string resourceId)
+        {
+            try
+            {
+                return await CreateServerPublicIP(serverName, resourceId);
+            }
+            catch
+            {
+                return await GetServerIP(resourceId);
+            }
         }
 
         /// <summary>
@@ -162,7 +157,7 @@ namespace Sheesh3Bot.Services
         /// </summary>
         /// <param name="serverName"></param>
         /// <returns></returns>
-        public static async Task<string> CreateServerPublicIP(string serverName)
+        public static async Task<string> CreateServerPublicIP(string serverName, string resourceId)
         {
             await LoadResourceGroup();
             // TODO: Dynamically set location based on selected server. Fine for now.
@@ -182,6 +177,7 @@ namespace Sheesh3Bot.Services
             var publicIpAddress = publicIPAddressContainer.CreateOrUpdate(WaitUntil.Completed, $"{serverName}-ip", publicIPAddressData).Value;
             publicIpAddress = publicIpAddress.Get();
             var vnet = _resourceGroup.GetVirtualNetworks().FirstOrDefault();
+            vnet = vnet.Get();
 
             var networkInterfaceData = new NetworkInterfaceData
             {
@@ -200,17 +196,10 @@ namespace Sheesh3Bot.Services
             };
 
             // Get the server's current Network Interface
-            NetworkInterfaceResource networkInterface = null;
-            await foreach (VirtualMachineResource virtualMachine in _resourceGroup.GetVirtualMachines())
-            {
-                if (virtualMachine.Data.Name.ToLower() != serverName.ToLower())
-                {
-                    continue;
-                }
-
-                var networkProfile = virtualMachine.Data.NetworkProfile.NetworkInterfaces.FirstOrDefault();
-                networkInterface = _client.GetNetworkInterfaceResource(new ResourceIdentifier(networkProfile.Id));
-            }
+            var vm = _client.GetVirtualMachineResource(ResourceIdentifier.Parse(resourceId));
+            vm = vm.Get();
+            var networkProfile = vm.Data.NetworkProfile.NetworkInterfaces.FirstOrDefault();
+            var networkInterface = _client.GetNetworkInterfaceResource(new ResourceIdentifier(networkProfile.Id));
 
             if (networkInterface == null)
             {
@@ -218,14 +207,15 @@ namespace Sheesh3Bot.Services
             }
 
             // Update the interface to the new data
-            networkInterfaceContainer.CreateOrUpdate(WaitUntil.Completed, networkInterface.Id.Name, networkInterfaceData);
+            await networkInterfaceContainer.CreateOrUpdateAsync(WaitUntil.Completed, networkInterface.Id.Name, networkInterfaceData);
 
             var publicIpAddressResource = _client.GetPublicIPAddressResource(publicIpAddress.Id);
+            publicIpAddressResource = publicIpAddressResource.Get();
 
             return publicIpAddressResource.Data.IPAddress.ToString();
         }
 
-        public static async Task DeleteServerPublicIP(string serverName)
+        public static async Task DeleteServerPublicIP(string serverName, string resourceId)
         {
             await LoadResourceGroup();
             // TODO: Dynamically set location based on selected server. Fine for now.
@@ -251,17 +241,10 @@ namespace Sheesh3Bot.Services
             };
 
             // Get the server's current Network Interface
-            NetworkInterfaceResource networkInterface = null;
-            await foreach (VirtualMachineResource virtualMachine in _resourceGroup.GetVirtualMachines())
-            {
-                if (virtualMachine.Data.Name.ToLower() != serverName.ToLower())
-                {
-                    continue;
-                }
-
-                var networkProfile = virtualMachine.Data.NetworkProfile.NetworkInterfaces.FirstOrDefault();
-                networkInterface = _client.GetNetworkInterfaceResource(new ResourceIdentifier(networkProfile.Id));
-            }
+            var vm = _client.GetVirtualMachineResource(ResourceIdentifier.Parse(resourceId));
+            vm = vm.Get();
+            var networkProfile = vm.Data.NetworkProfile.NetworkInterfaces.FirstOrDefault();
+            var networkInterface = _client.GetNetworkInterfaceResource(new ResourceIdentifier(networkProfile.Id));
 
             if (networkInterface == null)
             {
@@ -296,9 +279,45 @@ namespace Sheesh3Bot.Services
 
                 if (displayStatus.Contains("deallocated") || displayStatus.Contains("stopped"))
                 {
-                    await DeleteServerPublicIP(virtualMachine.Data.Name);
+                    await DeleteServerPublicIP(virtualMachine.Data.Name, virtualMachine.Id.ToString());
                 }
             }
+        }
+
+        public static double GetAverageNetworkUsageBytesPast15Minutes(string resourceId)
+        {
+            var options = new ArmResourceGetMonitorMetricsOptions()
+            {
+                //Metricnamespace = "Virtual Machine Host",
+                Metricnames = "Network In Total",
+                //Interval = TimeSpan.FromMinutes(1),
+                Timespan = $"{DateTime.UtcNow.AddMinutes(-15).ToString("o")}/{DateTime.UtcNow.ToString("o")}",
+            };
+            
+
+            var metrics = _client.GetMonitorMetrics(ResourceIdentifier.Parse(resourceId), options);
+
+
+            var sum = 0.0;
+            var count = 0;
+            foreach (MonitorMetric metric in metrics)
+            {
+                foreach (var timeSeries in metric.Timeseries)
+                {
+                    foreach (var data in timeSeries.Data)
+                    {
+                        if (data.Total.HasValue)
+                        {
+                            sum += data.Total.Value;
+                            count++;
+                        }
+                    }
+                }
+            }
+
+            double average = sum / count;
+
+            return average;
         }
     }
 }
