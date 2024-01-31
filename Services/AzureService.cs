@@ -293,8 +293,8 @@ namespace Sheesh3Bot.Services
             {
                 //Metricnamespace = "Virtual Machine Host",
                 Metricnames = "Network In Total",
-                //Interval = TimeSpan.FromMinutes(1),
-                Timespan = $"{DateTime.UtcNow.AddMinutes(-15).ToString("o")}/{DateTime.UtcNow.ToString("o")}",
+                Interval = TimeSpan.FromMinutes(1),
+                Timespan = $"{DateTime.UtcNow.AddMinutes(-15).ToString("o")}/{DateTime.UtcNow.ToString("o")}"
             };
             
 
@@ -309,7 +309,7 @@ namespace Sheesh3Bot.Services
                 {
                     foreach (var data in timeSeries.Data)
                     {
-                        if (data.Total.HasValue)
+                        if (data.Total.HasValue && data.Total.Value > 0.0)
                         {
                             sum += data.Total.Value;
                             count++;
