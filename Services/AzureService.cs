@@ -309,7 +309,7 @@ namespace Sheesh3Bot.Services
                 {
                     foreach (var data in timeSeries.Data)
                     {
-                        if (data.Total.HasValue && data.Total.Value > 0.0)
+                        if (data.Total.HasValue)
                         {
                             sum += data.Total.Value;
                             count++;
