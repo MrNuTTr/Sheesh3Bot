@@ -12,10 +12,9 @@ namespace Sheesh3Bot.Functions
 {
     public class ServerTimerShutdownFunc
     {
-        // Runs once every five minutes
         [FunctionName("ServerTimerShutdownFunc")]
         public static async Task Run(
-            [TimerTrigger("0 */15 * * * *")]TimerInfo timer,
+            [TimerTrigger("0 */10 * * * *")]TimerInfo timer,
             [Table("serverTimerShutdownTable")] TableClient tableClient,
             [Table("serverDataTable")] TableClient serverDataTable,
             ILogger log)
@@ -32,9 +31,11 @@ namespace Sheesh3Bot.Functions
                 }
 
                 var resourceId = serverDataTable.GetEntity<ServerData>(request.ServerName, request.ServerName).Value.ResourceID;
-                var averageNetworkBytes = AzureService.GetAverageNetworkUsageBytesPast15Minutes(resourceId);
+                var averageNetworkBytes = AzureService.GetAverageNetworkUsageBytesPast10Minutes(resourceId);
 
-                if (averageNetworkBytes < 50000.0)
+                log.LogInformation($"{request.ServerName} has {averageNetworkBytes} average bytes of activity in the last 10 minutes");
+
+                if (averageNetworkBytes < 100000.0)
                 {
                     log.LogInformation($"Turning off server: {request.ServerName}");
                     await AzureService.TurnOffGameServer(resourceId);

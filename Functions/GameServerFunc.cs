@@ -34,7 +34,7 @@ namespace Sheesh3Bot.Functions
 
                 await DiscordService.FollowupEditAsync(interaction, "Turning on the server. Please wait a minute.");
 
-                AzureService.SendServerShutdownRequest(serverShutdownTable, serverId, DateTime.UtcNow.AddHours(1));
+                AzureService.SendServerShutdownRequest(serverShutdownTable, serverId, DateTime.UtcNow.AddMinutes(20));
 
                 var startServer = AzureService.TurnOnGameServer(resourceId);
                 var assignIP = AzureService.GetServerPublicIP(serverId, resourceId);

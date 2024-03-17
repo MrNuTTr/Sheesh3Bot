@@ -287,14 +287,14 @@ namespace Sheesh3Bot.Services
             }
         }
 
-        public static double GetAverageNetworkUsageBytesPast15Minutes(string resourceId)
+        public static double GetAverageNetworkUsageBytesPast10Minutes(string resourceId)
         {
             var options = new ArmResourceGetMonitorMetricsOptions()
             {
                 //Metricnamespace = "Virtual Machine Host",
                 Metricnames = "Network In Total",
                 Interval = TimeSpan.FromMinutes(1),
-                Timespan = $"{DateTime.UtcNow.AddMinutes(-15).ToString("o")}/{DateTime.UtcNow.ToString("o")}"
+                Timespan = $"{DateTime.UtcNow.AddMinutes(-10).ToString("o")}/{DateTime.UtcNow.ToString("o")}"
             };
             
 
@@ -318,7 +318,8 @@ namespace Sheesh3Bot.Services
                 }
             }
 
-            double average = sum / count;
+            double average = count > 0 ? sum / count : 0;
+
 
             return average;
         }
